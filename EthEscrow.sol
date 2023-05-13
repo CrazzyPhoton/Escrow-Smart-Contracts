@@ -37,7 +37,7 @@ contract Escrow {
 
     uint8 public escrowProviderCut;
     uint8 public automaticWithdrawTime;
-    uint256 public totalEthEscrowCreated;
+    uint256 public totalEthEscrowsCreated;
 
     constructor() {
         arbiter = msg.sender;
@@ -52,15 +52,15 @@ contract Escrow {
         uint256 _revisionsOffered) public {
         require(_seller != _buyer, "Seller and buyer should not be same");
         require(msg.sender == _seller, "Seller should create escrow");
-        require(ethEscrowId[totalEthEscrowCreated + 1].escrowState == EscrowState.NonExistent, "Escrow id exists");
-        ethEscrowId[totalEthEscrowCreated + 1].buyer = _buyer;
-        ethEscrowId[totalEthEscrowCreated + 1].seller = _seller;
-        ethEscrowId[totalEthEscrowCreated + 1].ethAmount = _ethAmount;
-        ethEscrowId[totalEthEscrowCreated + 1].revisionsOffered = _revisionsOffered;
-        ethEscrowId[totalEthEscrowCreated + 1].escrowProviderCutForEscrow = escrowProviderCut;
-        ethEscrowId[totalEthEscrowCreated + 1].automaticWithdrawTimeForEscrow = automaticWithdrawTime;
-        ethEscrowId[totalEthEscrowCreated + 1].escrowState = EscrowState.Created;
-        totalEthEscrowCreated++;
+        require(ethEscrowId[totalEthEscrowsCreated + 1].escrowState == EscrowState.NonExistent, "Escrow id exists");
+        ethEscrowId[totalEthEscrowsCreated + 1].buyer = _buyer;
+        ethEscrowId[totalEthEscrowsCreated + 1].seller = _seller;
+        ethEscrowId[totalEthEscrowsCreated + 1].ethAmount = _ethAmount;
+        ethEscrowId[totalEthEscrowsCreated + 1].revisionsOffered = _revisionsOffered;
+        ethEscrowId[totalEthEscrowsCreated + 1].escrowProviderCutForEscrow = escrowProviderCut;
+        ethEscrowId[totalEthEscrowsCreated + 1].automaticWithdrawTimeForEscrow = automaticWithdrawTime;
+        ethEscrowId[totalEthEscrowsCreated + 1].escrowState = EscrowState.Created;
+        totalEthEscrowsCreated++;
     }
 
     // FUND ETH ESCROW //
