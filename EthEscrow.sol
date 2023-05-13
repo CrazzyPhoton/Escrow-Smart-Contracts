@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.0;
+pragma solidity 0.8.20;
 
 contract Escrow {
 
@@ -35,9 +35,9 @@ contract Escrow {
     mapping(uint256 => bool) public raisedCancellationRequestForEthEscrowId;
     mapping(uint256 => address) public raisedCancellationRequestBy;
 
-    uint8 public escrowProviderCut = 5;
-    uint8 public automaticWithdrawTime = 7;
-    uint256 public startEthEscrowId = 1;
+    uint8 public escrowProviderCut;
+    uint8 public automaticWithdrawTime;
+    uint256 public totalEthEscrowCreated;
 
     constructor() {
         arbiter = msg.sender;
@@ -52,15 +52,15 @@ contract Escrow {
         uint256 _revisionsOffered) public {
         require(_seller != _buyer, "Seller and buyer should not be same");
         require(msg.sender == _seller, "Seller should create escrow");
-        require(ethEscrowId[startEthEscrowId].escrowState == EscrowState.NonExistent, "Escrow id exists");
-        ethEscrowId[startEthEscrowId].buyer = _buyer;
-        ethEscrowId[startEthEscrowId].seller = _seller;
-        ethEscrowId[startEthEscrowId].ethAmount = _ethAmount;
-        ethEscrowId[startEthEscrowId].revisionsOffered = _revisionsOffered;
-        ethEscrowId[startEthEscrowId].escrowProviderCutForEscrow = escrowProviderCut;
-        ethEscrowId[startEthEscrowId].automaticWithdrawTimeForEscrow = automaticWithdrawTime;
-        ethEscrowId[startEthEscrowId].escrowState = EscrowState.Created;
-        startEthEscrowId++;
+        require(ethEscrowId[totalEthEscrowCreated + 1].escrowState == EscrowState.NonExistent, "Escrow id exists");
+        ethEscrowId[totalEthEscrowCreated + 1].buyer = _buyer;
+        ethEscrowId[totalEthEscrowCreated + 1].seller = _seller;
+        ethEscrowId[totalEthEscrowCreated + 1].ethAmount = _ethAmount;
+        ethEscrowId[totalEthEscrowCreated + 1].revisionsOffered = _revisionsOffered;
+        ethEscrowId[totalEthEscrowCreated + 1].escrowProviderCutForEscrow = escrowProviderCut;
+        ethEscrowId[totalEthEscrowCreated + 1].automaticWithdrawTimeForEscrow = automaticWithdrawTime;
+        ethEscrowId[totalEthEscrowCreated + 1].escrowState = EscrowState.Created;
+        totalEthEscrowCreated++;
     }
 
     // FUND ETH ESCROW //
