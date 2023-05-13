@@ -103,14 +103,14 @@ contract Escrow {
         if (currentTime - ethEscrowId[escrowId].deliverdAtTime > ethEscrowId[escrowId].automaticWithdrawTimeForEscrow && 
             msg.sender == ethEscrowId[escrowId].seller &&
             ethEscrowId[escrowId].escrowState == EscrowState.Delivered) {
-            sendValue(ethEscrowId[escrowId].seller, ethEscrowId[escrowId].ethAmount * (100 - ethEscrowId[escrowId].escrowProviderCutForEscrow) / 100);
-            sendValue(arbiter, ethEscrowId[escrowId].ethAmount * ethEscrowId[escrowId].escrowProviderCutForEscrow / 100);
+            sendValue(payable(ethEscrowId[escrowId].seller), ethEscrowId[escrowId].ethAmount * (100 - ethEscrowId[escrowId].escrowProviderCutForEscrow) / 100);
+            sendValue(payable(arbiter), ethEscrowId[escrowId].ethAmount * ethEscrowId[escrowId].escrowProviderCutForEscrow / 100);
             ethEscrowId[escrowId].escrowState = EscrowState.Completed;
         } else {
             require(ethEscrowId[escrowId].escrowState == EscrowState.Delivered, "Not delivered yet for escrow id");
             require(msg.sender == ethEscrowId[escrowId].buyer, "You are not the buyer for this escrow id");
-            sendValue(ethEscrowId[escrowId].seller, ethEscrowId[escrowId].ethAmount * (100 - ethEscrowId[escrowId].escrowProviderCutForEscrow) / 100);
-            sendValue(arbiter, ethEscrowId[escrowId].ethAmount * ethEscrowId[escrowId].escrowProviderCutForEscrow / 100);
+            sendValue(payable(ethEscrowId[escrowId].seller), ethEscrowId[escrowId].ethAmount * (100 - ethEscrowId[escrowId].escrowProviderCutForEscrow) / 100);
+            sendValue(payable(arbiter), ethEscrowId[escrowId].ethAmount * ethEscrowId[escrowId].escrowProviderCutForEscrow / 100);
             ethEscrowId[escrowId].escrowState = EscrowState.Completed;
         }
     }
@@ -135,11 +135,11 @@ contract Escrow {
         if (raisedCancellationRequestBy[escrowId] == ethEscrowId[escrowId].buyer) {
             require(msg.sender == ethEscrowId[escrowId].seller, "Caller not seller");
             ethEscrowId[escrowId].escrowState = EscrowState.Cancelled;
-            sendValue(ethEscrowId[escrowId].buyer, ethEscrowId[escrowId].ethAmount);
+            sendValue(payable(ethEscrowId[escrowId].buyer), ethEscrowId[escrowId].ethAmount);
         } else {
             require(msg.sender == ethEscrowId[escrowId].buyer, "Caller not buyer");
             ethEscrowId[escrowId].escrowState = EscrowState.Cancelled;
-            sendValue(ethEscrowId[escrowId].buyer, ethEscrowId[escrowId].ethAmount);
+            sendValue(payable(ethEscrowId[escrowId].buyer), ethEscrowId[escrowId].ethAmount);
         }
     }
 
@@ -168,9 +168,9 @@ contract Escrow {
         require(msg.sender == arbiter, "Caller not arbiter");
         uint256 arbiterAmount = ethEscrowId[escrowId].ethAmount * ethEscrowId[escrowId].escrowProviderCutForEscrow / 100;
         require(buyerAmount + sellerAmount + arbiterAmount == ethEscrowId[escrowId].ethAmount, "Total amount not equal to ETH amount");
-        sendValue(ethEscrowId[escrowId].buyer, buyerAmount);
-        sendValue(ethEscrowId[escrowId].seller, sellerAmount);
-        sendValue(arbiter, arbiterAmount);
+        sendValue(payable(ethEscrowId[escrowId].buyer), buyerAmount);
+        sendValue(payable(ethEscrowId[escrowId].seller), sellerAmount);
+        sendValue(payable(arbiter), arbiterAmount);
         ethEscrowId[escrowId].escrowState == EscrowState.Resolved;
     }
 
