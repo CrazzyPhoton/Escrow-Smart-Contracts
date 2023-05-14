@@ -16,27 +16,30 @@ contract EthEscrowSmartContract {
         Cancelled,
         Resolved,
         Delivered,
+        InRevision,
         Completed
     }
 
     mapping(uint256 => EthEscrow) public ethEscrowId;
+    mapping(address => uint256[]) private myEscrowsAsBuyer;
+    mapping(address => uint256[]) private myEscrowsAsSeller;
     mapping(uint256 => bool) public raisedIssueForEthEscrowId;
     mapping(uint256 => address) public raisedIssueBy;
     mapping(uint256 => bool) public raisedCancellationRequestForEthEscrowId;
     mapping(uint256 => address) public raisedCancellationRequestBy;
 
     struct EthEscrow {
-       address buyer;
-       address seller;
-       EscrowState escrowState; 
-       uint256 ethAmount;
-       uint256 deliverdAtTime;
-       uint256 revisionsOffered;
-       uint256 totalDeliveries;
-       uint256 revisionsRequested;
-       uint8 escrowProviderFeeForEscrow;
-       uint8 escrowProviderIssueResolutionFeeForEscrow;
-       uint8 automaticWithdrawTimeForEscrow;
+        address buyer;
+        address seller;
+        EscrowState escrowState; 
+        uint256 ethAmount;
+        uint256 deliverdAtTime;
+        uint256 revisionsOffered;
+        uint256 totalDeliveries;
+        uint256 revisionsRequested;
+        uint8 escrowProviderFeeForEscrow;
+        uint8 escrowProviderIssueResolutionFeeForEscrow;
+        uint8 automaticWithdrawTimeForEscrow;
     }
 
     uint8 public escrowProviderFee;
@@ -59,7 +62,9 @@ contract EthEscrowSmartContract {
         require(msg.sender != _buyer, "Seller and buyer should not be same");
         require(_ethAmount > 0, "ETH amount must be greater than zero");
         ethEscrowId[totalEthEscrowsCreated + 1].buyer = _buyer;
+        myEscrowsAsBuyer[_buyer].push(totalEthEscrowsCreated + 1);
         ethEscrowId[totalEthEscrowsCreated + 1].seller = msg.sender;
+        myEscrowsAsSeller[msg.sender].push(totalEthEscrowsCreated + 1);
         ethEscrowId[totalEthEscrowsCreated + 1].ethAmount = _ethAmount;
         ethEscrowId[totalEthEscrowsCreated + 1].revisionsOffered = _revisionsOffered;
         ethEscrowId[totalEthEscrowsCreated + 1].escrowProviderFeeForEscrow = escrowProviderFee;
@@ -84,7 +89,11 @@ contract EthEscrowSmartContract {
     function markDeliveredForEthEscrow(uint256 escrowId) public {
         require(raisedCancellationRequestForEthEscrowId[escrowId] == false, "Cancellation request active");
         require(raisedIssueForEthEscrowId[escrowId] == false, "Issue raised");
-        require(ethEscrowId[escrowId].escrowState == EscrowState.Funded, "Escrow id not funded yet");
+        require (
+            ethEscrowId[escrowId].escrowState == EscrowState.Funded ||
+            ethEscrowId[escrowId].escrowState == EscrowState.InRevision,
+            "Escrow id not funded yet"
+        );
         require(ethEscrowId[escrowId].totalDeliveries + 1 <= ethEscrowId[escrowId].revisionsOffered + 1, "Can't deliver again");
         require(msg.sender == ethEscrowId[escrowId].seller, "You are not the seller for this escrow id");
         ethEscrowId[escrowId].escrowState = EscrowState.Delivered;
@@ -98,7 +107,7 @@ contract EthEscrowSmartContract {
         require(msg.sender == ethEscrowId[escrowId].buyer, "You are not the buyer for this escrow id");
         require(ethEscrowId[escrowId].escrowState == EscrowState.Delivered, "Not delivered yet for escrow id");
         require(ethEscrowId[escrowId].revisionsRequested + 1 <= ethEscrowId[escrowId].revisionsOffered, "Can't request more revision for escrow id");
-        ethEscrowId[escrowId].escrowState = EscrowState.Funded;
+        ethEscrowId[escrowId].escrowState = EscrowState.InRevision;
         ethEscrowId[escrowId].revisionsRequested++;
     }
 
@@ -142,10 +151,12 @@ contract EthEscrowSmartContract {
         if (raisedCancellationRequestBy[escrowId] == ethEscrowId[escrowId].buyer) {
             require(msg.sender == ethEscrowId[escrowId].seller, "Caller not seller");
             ethEscrowId[escrowId].escrowState = EscrowState.Cancelled;
+            raisedCancellationRequestForEthEscrowId[escrowId] = false;
             sendValue(payable(ethEscrowId[escrowId].buyer), ethEscrowId[escrowId].ethAmount);
         } else {
             require(msg.sender == ethEscrowId[escrowId].buyer, "Caller not buyer");
             ethEscrowId[escrowId].escrowState = EscrowState.Cancelled;
+            raisedCancellationRequestForEthEscrowId[escrowId] = false;
             sendValue(payable(ethEscrowId[escrowId].buyer), ethEscrowId[escrowId].ethAmount);
         }
     }
@@ -179,6 +190,7 @@ contract EthEscrowSmartContract {
         sendValue(payable(ethEscrowId[escrowId].seller), sellerAmount);
         sendValue(payable(arbiter), arbiterAmount);
         ethEscrowId[escrowId].escrowState == EscrowState.Resolved;
+        raisedIssueForEthEscrowId[escrowId] = false;
     }
 
     // CONFIGURATIONS //
@@ -224,4 +236,205 @@ contract EthEscrowSmartContract {
         require(success, "Address: unable to send value, recipient may have reverted");
     }
 
+    // BUYER FUNCTIONS //
+
+    function viewMyEscrowsAsBuyer(address myAddress) public view returns (uint256[] memory escrowIds) {
+        escrowIds = myEscrowsAsBuyer[myAddress];
+    }
+
+    function viewMyFundedEscrowsAsBuyer(address myAddress) public view returns(uint256[] memory fundedEscrowIds) {
+        uint256[] memory escrowIds = myEscrowsAsBuyer[myAddress];
+        fundedEscrowIds = new uint256[](escrowIds.length);
+        uint256 counter;
+        for (uint256 i = 0; i < escrowIds.length; ++i) {
+            if (ethEscrowId[escrowIds[i]].escrowState == EscrowState.Funded) {
+               fundedEscrowIds[counter] = escrowIds[i];
+               ++counter;
+            }
+        }
+        assembly{mstore(fundedEscrowIds, counter)}
+        return fundedEscrowIds;
+    }
+
+    function viewMyCancelledEscrowsAsBuyer(address myAddress) public view returns(uint256[] memory cancelledEscrowIds) {
+        uint256[] memory escrowIds = myEscrowsAsBuyer[myAddress];
+        cancelledEscrowIds = new uint256[](escrowIds.length);
+        uint256 counter;
+        for (uint256 i = 0; i < escrowIds.length; ++i) {
+            if (ethEscrowId[escrowIds[i]].escrowState == EscrowState.Cancelled) {
+               cancelledEscrowIds[counter] = escrowIds[i];
+               ++counter;
+            }
+        }
+        assembly{mstore(cancelledEscrowIds, counter)}
+        return cancelledEscrowIds;
+    }
+
+    function viewMyResolvedEscrowsAsBuyer(address myAddress) public view returns(uint256[] memory resolvedEscrowIds) {
+        uint256[] memory escrowIds = myEscrowsAsBuyer[myAddress];
+        resolvedEscrowIds = new uint256[](escrowIds.length);
+        uint256 counter;
+        for (uint256 i = 0; i < escrowIds.length; ++i) {
+            if (ethEscrowId[escrowIds[i]].escrowState == EscrowState.Resolved) {
+               resolvedEscrowIds[counter] = escrowIds[i];
+               ++counter;
+            }
+        }
+        assembly{mstore(resolvedEscrowIds, counter)}
+        return resolvedEscrowIds;
+    }
+
+    function viewMyDeliveredEscrowsAsBuyer(address myAddress) public view returns(uint256[] memory deliveredEscrowIds) {
+        uint256[] memory escrowIds = myEscrowsAsBuyer[myAddress];
+        deliveredEscrowIds = new uint256[](escrowIds.length);
+        uint256 counter;
+        for (uint256 i = 0; i < escrowIds.length; ++i) {
+            if (ethEscrowId[escrowIds[i]].escrowState == EscrowState.Delivered) {
+               deliveredEscrowIds[counter] = escrowIds[i];
+               ++counter;
+            }
+        }
+        assembly{mstore(deliveredEscrowIds, counter)}
+        return deliveredEscrowIds;
+    }
+
+    function viewMyInRevisionEscrowsAsBuyer(address myAddress) public view returns(uint256[] memory inrevisionEscrowIds) {
+        uint256[] memory escrowIds = myEscrowsAsBuyer[myAddress];
+        inrevisionEscrowIds = new uint256[](escrowIds.length);
+        uint256 counter;
+        for (uint256 i = 0; i < escrowIds.length; ++i) {
+            if (ethEscrowId[escrowIds[i]].escrowState == EscrowState.InRevision) {
+               inrevisionEscrowIds[counter] = escrowIds[i];
+               ++counter;
+            }
+        }
+        assembly{mstore(inrevisionEscrowIds, counter)}
+        return inrevisionEscrowIds;
+    }
+
+    function viewMyCompletedEscrowsAsBuyer(address myAddress) public view returns(uint256[] memory completedEscrowIds) {
+        uint256[] memory escrowIds = myEscrowsAsBuyer[myAddress];
+        completedEscrowIds = new uint256[](escrowIds.length);
+        uint256 counter;
+        for (uint256 i = 0; i < escrowIds.length; ++i) {
+            if (ethEscrowId[escrowIds[i]].escrowState == EscrowState.Completed) {
+               completedEscrowIds[counter] = escrowIds[i];
+               ++counter;
+            }
+        }
+        assembly{mstore(completedEscrowIds, counter)}
+        return completedEscrowIds;
+    }
+
+    // SELLER FUNCTIONS //
+
+    function viewMyEscrowsAsSeller(address myAddress) public view returns (uint256[] memory escrowIds) {
+        escrowIds = myEscrowsAsSeller[myAddress];
+    }
+
+    function viewMyFundedEscrowsAsSeller(address myAddress) public view returns(uint256[] memory fundedEscrowIds) {
+        uint256[] memory escrowIds = myEscrowsAsSeller[myAddress];
+        fundedEscrowIds = new uint256[](escrowIds.length);
+        uint256 counter;
+        for (uint256 i = 0; i < escrowIds.length; ++i) {
+            if (ethEscrowId[escrowIds[i]].escrowState == EscrowState.Funded) {
+               fundedEscrowIds[counter] = escrowIds[i];
+               ++counter;
+            }
+        }
+        assembly{mstore(fundedEscrowIds, counter)}
+        return fundedEscrowIds;
+    }
+
+    function viewMyCancelledEscrowsAsSeller(address myAddress) public view returns(uint256[] memory cancelledEscrowIds) {
+        uint256[] memory escrowIds = myEscrowsAsSeller[myAddress];
+        cancelledEscrowIds = new uint256[](escrowIds.length);
+        uint256 counter;
+        for (uint256 i = 0; i < escrowIds.length; ++i) {
+            if (ethEscrowId[escrowIds[i]].escrowState == EscrowState.Cancelled) {
+               cancelledEscrowIds[counter] = escrowIds[i];
+               ++counter;
+            }
+        }
+        assembly{mstore(cancelledEscrowIds, counter)}
+        return cancelledEscrowIds;
+    }
+
+    function viewMyResolvedEscrowsAsSeller(address myAddress) public view returns(uint256[] memory resolvedEscrowIds) {
+        uint256[] memory escrowIds = myEscrowsAsSeller[myAddress];
+        resolvedEscrowIds = new uint256[](escrowIds.length);
+        uint256 counter;
+        for (uint256 i = 0; i < escrowIds.length; ++i) {
+            if (ethEscrowId[escrowIds[i]].escrowState == EscrowState.Resolved) {
+               resolvedEscrowIds[counter] = escrowIds[i];
+               ++counter;
+            }
+        }
+        assembly{mstore(resolvedEscrowIds, counter)}
+        return resolvedEscrowIds;
+    }
+
+    function viewMyDeliveredEscrowsAsSeller(address myAddress) public view returns(uint256[] memory deliveredEscrowIds) {
+        uint256[] memory escrowIds = myEscrowsAsSeller[myAddress];
+        deliveredEscrowIds = new uint256[](escrowIds.length);
+        uint256 counter;
+        for (uint256 i = 0; i < escrowIds.length; ++i) {
+            if (ethEscrowId[escrowIds[i]].escrowState == EscrowState.Delivered) {
+               deliveredEscrowIds[counter] = escrowIds[i];
+               ++counter;
+            }
+        }
+        assembly{mstore(deliveredEscrowIds, counter)}
+        return deliveredEscrowIds;
+    }
+
+    function viewMyInRevisionEscrowsAsSeller(address myAddress) public view returns(uint256[] memory inrevisionEscrowIds) {
+        uint256[] memory escrowIds = myEscrowsAsSeller[myAddress];
+        inrevisionEscrowIds = new uint256[](escrowIds.length);
+        uint256 counter;
+        for (uint256 i = 0; i < escrowIds.length; ++i) {
+            if (ethEscrowId[escrowIds[i]].escrowState == EscrowState.InRevision) {
+               inrevisionEscrowIds[counter] = escrowIds[i];
+               ++counter;
+            }
+        }
+        assembly{mstore(inrevisionEscrowIds, counter)}
+        return inrevisionEscrowIds;
+    }
+
+    function viewMyCompletedEscrowsAsSeller(address myAddress) public view returns(uint256[] memory completedEscrowIds) {
+        uint256[] memory escrowIds = myEscrowsAsSeller[myAddress];
+        completedEscrowIds = new uint256[](escrowIds.length);
+        uint256 counter = 0;
+        for (uint256 i = 0; i < escrowIds.length; ++i) {
+            if (ethEscrowId[escrowIds[i]].escrowState == EscrowState.Completed) {
+               completedEscrowIds[counter] = escrowIds[i];
+               ++counter;
+            }
+        }
+        assembly{mstore(completedEscrowIds, counter)}
+        return completedEscrowIds;
+    }
+
+    // ACTIVE ISSUES //
+
+    function viewActiveIssues() public view returns (uint256[] memory activeIssuesEscrowIds) {
+        require(totalEthEscrowsCreated > 0, "No ETH escrows created");
+        activeIssuesEscrowIds = new uint256[](totalEthEscrowsCreated);
+        uint256 counter = 0;
+        for (uint256 i = 0; i < totalEthEscrowsCreated; ++i) {
+            if (raisedIssueForEthEscrowId[i + 1] == true) {
+               activeIssuesEscrowIds[counter] = i + 1;
+               ++counter;
+            }
+        }
+        assembly{mstore(activeIssuesEscrowIds, counter)}
+    }
+
 }
+
+// TO BE DONE:- 
+
+// VIEW FUNCTION - ACTIVE ISSUES TO BE RESOLVED BY ARBITER
+// VIEW FUNCTION - ACTIVE CANCELLATION REQUESTS AS BUYER / SELLER
+// EVENTS TO BE EMITTED WHEN ISSUE RESOLVED
