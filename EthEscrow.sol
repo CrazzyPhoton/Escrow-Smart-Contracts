@@ -58,7 +58,6 @@ contract EthEscrow {
         require(_buyer != address(0), "Buyer must not be zero address");
         require(msg.sender != _buyer, "Seller and buyer should not be same");
         require(_ethAmount > 0, "ETH amount must be greater than zero");
-        require(ethEscrowId[totalEthEscrowsCreated + 1].escrowState == EscrowState.NonExistent, "Escrow id exists");
         ethEscrowId[totalEthEscrowsCreated + 1].buyer = _buyer;
         ethEscrowId[totalEthEscrowsCreated + 1].seller = msg.sender;
         ethEscrowId[totalEthEscrowsCreated + 1].ethAmount = _ethAmount;
