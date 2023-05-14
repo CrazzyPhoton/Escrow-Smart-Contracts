@@ -5,6 +5,9 @@ pragma solidity 0.8.20;
 contract Escrow {
 
     address public arbiter;
+
+    bool public canCreateNewEscrow;
+    bool public canFundEscrow;
     
     enum EscrowState {
         NonExistent,
@@ -16,6 +19,12 @@ contract Escrow {
         Completed
     }
 
+    mapping(uint256 => EthEscrow) public ethEscrowId;
+    mapping(uint256 => bool) public raisedIssueForEthEscrowId;
+    mapping(uint256 => address) public raisedIssueBy;
+    mapping(uint256 => bool) public raisedCancellationRequestForEthEscrowId;
+    mapping(uint256 => address) public raisedCancellationRequestBy;
+
     struct EthEscrow {
        address buyer;
        address seller;
@@ -25,17 +34,13 @@ contract Escrow {
        uint256 revisionsOffered;
        uint256 totalDeliveries;
        uint256 revisionsRequested;
-       uint8 escrowProviderCutForEscrow;
+       uint8 escrowProviderFeeForEscrow;
+       uint8 escrowProviderIssueResolutionFeeForEscrow;
        uint8 automaticWithdrawTimeForEscrow;
     }
 
-    mapping(uint256 => EthEscrow) public ethEscrowId;
-    mapping(uint256 => bool) public raisedIssueForEthEscrowId;
-    mapping(uint256 => address) public raisedIssueBy;
-    mapping(uint256 => bool) public raisedCancellationRequestForEthEscrowId;
-    mapping(uint256 => address) public raisedCancellationRequestBy;
-
-    uint8 public escrowProviderCut;
+    uint8 public escrowProviderFee;
+    uint8 public issueResolutionFeeForEscrowProvider;
     uint8 public automaticWithdrawTime;
     uint256 public totalEthEscrowsCreated;
 
@@ -47,17 +52,19 @@ contract Escrow {
 
     function createNewEthEscrow (
         address _buyer,
-        address _seller,
         uint256 _ethAmount,
         uint256 _revisionsOffered) public {
-        require(_seller != _buyer, "Seller and buyer should not be same");
-        require(msg.sender == _seller, "Seller should create escrow");
+        require(canCreateNewEscrow == true, "Can't create new escrow");
+        require(_buyer != address(0), "Buyer must not be zero address");
+        require(msg.sender != _buyer, "Seller and buyer should not be same");
+        require(_ethAmount > 0, "ETH amount must be greater than zero");
         require(ethEscrowId[totalEthEscrowsCreated + 1].escrowState == EscrowState.NonExistent, "Escrow id exists");
         ethEscrowId[totalEthEscrowsCreated + 1].buyer = _buyer;
-        ethEscrowId[totalEthEscrowsCreated + 1].seller = _seller;
+        ethEscrowId[totalEthEscrowsCreated + 1].seller = msg.sender;
         ethEscrowId[totalEthEscrowsCreated + 1].ethAmount = _ethAmount;
         ethEscrowId[totalEthEscrowsCreated + 1].revisionsOffered = _revisionsOffered;
-        ethEscrowId[totalEthEscrowsCreated + 1].escrowProviderCutForEscrow = escrowProviderCut;
+        ethEscrowId[totalEthEscrowsCreated + 1].escrowProviderFeeForEscrow = escrowProviderFee;
+        ethEscrowId[totalEthEscrowsCreated + 1].escrowProviderIssueResolutionFeeForEscrow = issueResolutionFeeForEscrowProvider;
         ethEscrowId[totalEthEscrowsCreated + 1].automaticWithdrawTimeForEscrow = automaticWithdrawTime;
         ethEscrowId[totalEthEscrowsCreated + 1].escrowState = EscrowState.Created;
         totalEthEscrowsCreated++;
@@ -66,6 +73,7 @@ contract Escrow {
     // FUND ETH ESCROW //
 
     function fundEthEscrow(uint256 escrowId) public payable {
+        require(canFundEscrow == true, "Escrow funding stopped");
         require(ethEscrowId[escrowId].escrowState == EscrowState.Created, "Escrow id does not exist");
         require(msg.sender == ethEscrowId[escrowId].buyer, "You are not the buyer for this escrow id");
         require(msg.value == ethEscrowId[escrowId].ethAmount, "Improper ETH funding");
@@ -103,14 +111,14 @@ contract Escrow {
         if (currentTime - ethEscrowId[escrowId].deliverdAtTime > ethEscrowId[escrowId].automaticWithdrawTimeForEscrow && 
             msg.sender == ethEscrowId[escrowId].seller &&
             ethEscrowId[escrowId].escrowState == EscrowState.Delivered) {
-            sendValue(payable(ethEscrowId[escrowId].seller), ethEscrowId[escrowId].ethAmount * (100 - ethEscrowId[escrowId].escrowProviderCutForEscrow) / 100);
-            sendValue(payable(arbiter), ethEscrowId[escrowId].ethAmount * ethEscrowId[escrowId].escrowProviderCutForEscrow / 100);
+            sendValue(payable(ethEscrowId[escrowId].seller), ethEscrowId[escrowId].ethAmount * (100 - ethEscrowId[escrowId].escrowProviderFeeForEscrow) / 100);
+            sendValue(payable(arbiter), ethEscrowId[escrowId].ethAmount * ethEscrowId[escrowId].escrowProviderFeeForEscrow / 100);
             ethEscrowId[escrowId].escrowState = EscrowState.Completed;
         } else {
             require(ethEscrowId[escrowId].escrowState == EscrowState.Delivered, "Not delivered yet for escrow id");
             require(msg.sender == ethEscrowId[escrowId].buyer, "You are not the buyer for this escrow id");
-            sendValue(payable(ethEscrowId[escrowId].seller), ethEscrowId[escrowId].ethAmount * (100 - ethEscrowId[escrowId].escrowProviderCutForEscrow) / 100);
-            sendValue(payable(arbiter), ethEscrowId[escrowId].ethAmount * ethEscrowId[escrowId].escrowProviderCutForEscrow / 100);
+            sendValue(payable(ethEscrowId[escrowId].seller), ethEscrowId[escrowId].ethAmount * (100 - ethEscrowId[escrowId].escrowProviderFeeForEscrow) / 100);
+            sendValue(payable(arbiter), ethEscrowId[escrowId].ethAmount * ethEscrowId[escrowId].escrowProviderFeeForEscrow / 100);
             ethEscrowId[escrowId].escrowState = EscrowState.Completed;
         }
     }
@@ -166,7 +174,7 @@ contract Escrow {
     function resolveIssueForEthEscrow(uint256 escrowId, uint256 buyerAmount, uint256 sellerAmount) public {
         require(raisedIssueForEthEscrowId[escrowId] == true, "Issue not raised");
         require(msg.sender == arbiter, "Caller not arbiter");
-        uint256 arbiterAmount = ethEscrowId[escrowId].ethAmount * ethEscrowId[escrowId].escrowProviderCutForEscrow / 100;
+        uint256 arbiterAmount = ethEscrowId[escrowId].ethAmount * ethEscrowId[escrowId].escrowProviderIssueResolutionFeeForEscrow / 100;
         require(buyerAmount + sellerAmount + arbiterAmount == ethEscrowId[escrowId].ethAmount, "Total amount not equal to ETH amount");
         sendValue(payable(ethEscrowId[escrowId].buyer), buyerAmount);
         sendValue(payable(ethEscrowId[escrowId].seller), sellerAmount);
@@ -181,10 +189,26 @@ contract Escrow {
         automaticWithdrawTime = _automaticWithdrawTime;
     }
 
-    function setEscrowProviderCut(uint8 _escrowProviderCut) public {
+    function setCanCreateNewEscrow(bool state) public {
         require(msg.sender == arbiter, "Caller not arbiter");
-        require(_escrowProviderCut <= 100, "Cut must be less than 100%");
-        escrowProviderCut = _escrowProviderCut;
+        canCreateNewEscrow = state;
+    }
+
+    function setCanFundEscrow(bool state) public {
+        require(msg.sender == arbiter, "Caller not arbiter");
+        canFundEscrow = state;
+    }
+
+    function setEscrowProviderFee(uint8 _escrowProviderFee) public {
+        require(msg.sender == arbiter, "Caller not arbiter");
+        require(_escrowProviderFee <= 100, "Fee must be less than 100%");
+        escrowProviderFee = _escrowProviderFee;
+    }
+
+    function setIssueResolutionFeeForEscrowProvider(uint8 _issueResolutionFeeForEscrowProvider) public {
+        require(msg.sender == arbiter, "Caller not arbiter");
+        require(_issueResolutionFeeForEscrowProvider <= 100, "Fee must be less than 100%");
+        issueResolutionFeeForEscrowProvider = _issueResolutionFeeForEscrowProvider;
     }
 
     function setNewArbiter(address newArbiter) public {
