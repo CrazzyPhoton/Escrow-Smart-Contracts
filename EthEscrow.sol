@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.20;
 
-contract EthEscrow {
+contract EthEscrowSmartContract {
 
     address public arbiter;
 
