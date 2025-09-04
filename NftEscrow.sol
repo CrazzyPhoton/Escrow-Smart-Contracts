@@ -221,7 +221,7 @@ contract ERC721Holder is IERC721Receiver {
 
 pragma solidity ^0.8.19;
 
-contract NftEscrowSmartContract is ERC721Holder {
+contract NftEscrow is ERC721Holder {
 
     // STATE VARIABLES //
 
@@ -1080,5 +1080,6 @@ contract NftEscrowSmartContract is ERC721Holder {
         resolvedEscrowInfo = resolvedEscrowIdInfo[escrowId];
         return resolvedEscrowInfo;
     }
+
 
 }
