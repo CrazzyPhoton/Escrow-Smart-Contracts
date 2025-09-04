@@ -85,7 +85,7 @@ interface IERC20 {
 
 pragma solidity ^0.8.19;
 
-contract Erc20EscrowSmartContract {
+contract Erc20Escrow {
 
     // STATE VARIABLES //
 
